@@ -90,11 +90,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 else -> RestorationMode.NATURAL_4K_ULTRA
             }
 
+            // Immediately compute restored image for instant before/after visual feedback
+            val restored = withContext(Dispatchers.Default) {
+                AlgorithmicImageProcessor.process(
+                    inputBitmap = bitmap,
+                    mode = defaultMode,
+                    selectedStrength = _uiState.value.selectedStrength
+                )
+            }
+            val afterMetrics = withContext(Dispatchers.Default) {
+                PhotoQualityAnalyzer.analyze(restored)
+            }
+
             _uiState.value = _uiState.value.copy(
                 originalBitmap = bitmap,
-                restoredBitmap = null,
+                restoredBitmap = restored,
                 beforeMetrics = metrics,
-                afterMetrics = null,
+                afterMetrics = afterMetrics,
                 selectedMode = defaultMode,
                 currentPhotoTitle = sampleItem?.title ?: "Sample Photo",
                 isProcessing = false,
@@ -111,11 +123,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val metrics = withContext(Dispatchers.Default) {
                     PhotoQualityAnalyzer.analyze(bitmap)
                 }
+                // Automatically run restoration on loaded image
+                val restored = withContext(Dispatchers.Default) {
+                    AlgorithmicImageProcessor.process(
+                        inputBitmap = bitmap,
+                        mode = _uiState.value.selectedMode,
+                        selectedStrength = _uiState.value.selectedStrength
+                    )
+                }
+                val afterMetrics = withContext(Dispatchers.Default) {
+                    PhotoQualityAnalyzer.analyze(restored)
+                }
                 _uiState.value = _uiState.value.copy(
                     originalBitmap = bitmap,
-                    restoredBitmap = null,
+                    restoredBitmap = restored,
                     beforeMetrics = metrics,
-                    afterMetrics = null,
+                    afterMetrics = afterMetrics,
                     currentPhotoTitle = "Imported Photo",
                     isProcessing = false,
                     processingMessage = ""
@@ -131,6 +154,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setMode(mode: RestorationMode) {
         _uiState.value = _uiState.value.copy(selectedMode = mode)
+        autoUpdateRestoration()
     }
 
     fun setStrength(strength: EnhancementStrength) {
@@ -138,6 +162,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             selectedStrength = strength,
             manualParams = _uiState.value.manualParams.copy(strength = strength)
         )
+        autoUpdateRestoration()
     }
 
     fun setTarget4kOutput(enabled: Boolean) {
@@ -145,10 +170,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             target4kOutput = enabled,
             manualParams = _uiState.value.manualParams.copy(target4kOutput = enabled)
         )
+        autoUpdateRestoration()
     }
 
     fun updateManualParams(params: ManualEnhancementParams) {
         _uiState.value = _uiState.value.copy(manualParams = params)
+        autoUpdateRestoration()
+    }
+
+    private fun autoUpdateRestoration() {
+        val original = _uiState.value.originalBitmap ?: return
+        val mode = _uiState.value.selectedMode
+        val strength = _uiState.value.selectedStrength
+        val params = _uiState.value.manualParams.copy(strength = strength)
+
+        viewModelScope.launch {
+            val restored = withContext(Dispatchers.Default) {
+                AlgorithmicImageProcessor.process(
+                    inputBitmap = original,
+                    mode = mode,
+                    customParams = if (mode == RestorationMode.MANUAL_STUDIO) params else null,
+                    selectedStrength = strength
+                )
+            }
+            val afterMetrics = withContext(Dispatchers.Default) {
+                PhotoQualityAnalyzer.analyze(restored)
+            }
+            _uiState.value = _uiState.value.copy(
+                restoredBitmap = restored,
+                afterMetrics = afterMetrics
+            )
+        }
     }
 
     fun enhancePhoto(context: Context) {

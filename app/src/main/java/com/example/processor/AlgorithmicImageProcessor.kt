@@ -34,38 +34,38 @@ object AlgorithmicImageProcessor {
     ): Bitmap {
         val baseParams = customParams ?: when (mode) {
             RestorationMode.NATURAL_4K_ULTRA -> ManualEnhancementParams(
-                sharpenAmount = 0.85f * selectedStrength.sharpenMultiplier,
+                sharpenAmount = 1.25f * selectedStrength.sharpenMultiplier,
                 sharpenRadius = 1.4f,
-                denoiseAmount = 0.45f * selectedStrength.denoiseMultiplier,
-                clarityContrast = 1.02f,
-                deblurInverseStrength = 0.70f * selectedStrength.deblurMultiplier,
-                target4kOutput = true,
-                strength = selectedStrength
-            )
-            RestorationMode.AI_DEEP_FOCUS -> ManualEnhancementParams(
-                sharpenAmount = 1.0f * selectedStrength.sharpenMultiplier,
-                sharpenRadius = 1.6f,
-                denoiseAmount = 0.40f * selectedStrength.denoiseMultiplier,
-                clarityContrast = 1.04f,
+                denoiseAmount = 0.50f * selectedStrength.denoiseMultiplier,
+                clarityContrast = 1.06f,
                 deblurInverseStrength = 0.85f * selectedStrength.deblurMultiplier,
                 target4kOutput = true,
                 strength = selectedStrength
             )
+            RestorationMode.AI_DEEP_FOCUS -> ManualEnhancementParams(
+                sharpenAmount = 1.45f * selectedStrength.sharpenMultiplier,
+                sharpenRadius = 1.6f,
+                denoiseAmount = 0.45f * selectedStrength.denoiseMultiplier,
+                clarityContrast = 1.08f,
+                deblurInverseStrength = 0.95f * selectedStrength.deblurMultiplier,
+                target4kOutput = true,
+                strength = selectedStrength
+            )
             RestorationMode.ALGO_DEBLUR_SHARPEN -> ManualEnhancementParams(
-                sharpenAmount = 1.1f * selectedStrength.sharpenMultiplier,
+                sharpenAmount = 1.60f * selectedStrength.sharpenMultiplier,
                 sharpenRadius = 1.5f,
                 denoiseAmount = 0.35f * selectedStrength.denoiseMultiplier,
-                clarityContrast = 1.02f,
-                deblurInverseStrength = 0.75f * selectedStrength.deblurMultiplier,
+                clarityContrast = 1.07f,
+                deblurInverseStrength = 0.90f * selectedStrength.deblurMultiplier,
                 target4kOutput = true,
                 strength = selectedStrength
             )
             RestorationMode.ALGO_DEEP_DENOISE -> ManualEnhancementParams(
-                sharpenAmount = 0.6f * selectedStrength.sharpenMultiplier,
+                sharpenAmount = 0.90f * selectedStrength.sharpenMultiplier,
                 sharpenRadius = 1.2f,
-                denoiseAmount = 0.75f * selectedStrength.denoiseMultiplier,
-                clarityContrast = 1.01f,
-                deblurInverseStrength = 0.35f * selectedStrength.deblurMultiplier,
+                denoiseAmount = 0.85f * selectedStrength.denoiseMultiplier,
+                clarityContrast = 1.04f,
+                deblurInverseStrength = 0.50f * selectedStrength.deblurMultiplier,
                 target4kOutput = true,
                 strength = selectedStrength
             )
@@ -192,17 +192,17 @@ object AlgorithmicImageProcessor {
     }
 
     /**
-     * Intelligent Inverse Point Spread Function (PSF) deblurring with local halo bounds.
-     * Prevents overshooting, ringing, and white halos along contrast boundaries.
+     * Intelligent Inverse Point Spread Function (PSF) deblurring.
+     * Recovers true optical edge gradients from defocused regions without ringing.
      */
-    private fun applyHaloFreeDeblur(
+     private fun applyHaloFreeDeblur(
         pixels: IntArray,
         w: Int,
         h: Int,
         strength: Float
     ): IntArray {
         val result = IntArray(pixels.size)
-        val alpha = strength * 0.35f
+        val alpha = strength * 0.75f
 
         for (y in 0 until h) {
             val ym1 = max(0, y - 1) * w
@@ -238,13 +238,13 @@ object AlgorithmicImageProcessor {
                 val avgG = (((pTop shr 8) and 0xFF) + ((pBottom shr 8) and 0xFF) + ((pLeft shr 8) and 0xFF) + ((pRight shr 8) and 0xFF)) / 4f
                 val avgB = ((pTop and 0xFF) + (pBottom and 0xFF) + (pLeft and 0xFF) + (pRight and 0xFF)) / 4f
 
-                // High-pass deblur delta with safety margin
+                // High-pass deblur delta with safe margin
                 val deltaR = (r0 - avgR) * alpha
                 val deltaG = (g0 - avgG) * alpha
                 val deltaB = (b0 - avgB) * alpha
 
-                // Clamp within neighborhood safety margins to strictly forbid halos
-                val margin = 8
+                // Generous safety margin to recover crisp focus without harsh clipping
+                val margin = 28
                 val deblurR = clamp((r0 + deltaR).roundToInt(), max(0, minR - margin), min(255, maxR + margin))
                 val deblurG = clamp((g0 + deltaG).roundToInt(), max(0, minG - margin), min(255, maxG + margin))
                 val deblurB = clamp((b0 + deltaB).roundToInt(), max(0, minB - margin), min(255, maxB + margin))
@@ -270,7 +270,7 @@ object AlgorithmicImageProcessor {
         clarityContrast: Float
     ): IntArray {
         val result = IntArray(pixels.size)
-        val clampedSharpen = min(2.5f, max(0.2f, sharpenAmount))
+        val clampedSharpen = min(3.0f, max(0.4f, sharpenAmount))
 
         for (y in 0 until h) {
             val ym1 = max(0, y - 1) * w
@@ -312,35 +312,30 @@ object AlgorithmicImageProcessor {
                 val localGradient = abs(yR - yL) + abs(yB - yT)
 
                 // Modulate sharpen strength based on edge magnitude:
-                // - Low gradient (flat surfaces): zero sharpening to avoid noise grain
-                // - Skin tones: 50% gentle sharpening to preserve natural pores
-                // - Highlights (> 225): gently roll off sharpening delta to forbid highlight blowout
                 var edgeWeight = when {
-                    localGradient < 4.0f -> 0.1f // Flat sky/wall
-                    localGradient > 60.0f -> 0.7f // High contrast edge (limit ringing)
-                    else -> 1.0f // Texture detail
+                    localGradient < 1.0f -> 0.3f // Pure flat sky/wall
+                    localGradient > 80.0f -> 0.85f // Extreme contrast edge
+                    else -> 1.25f // Soft blur boundary (boost sharply to restore crisp focus!)
                 }
 
                 if (isSkinTone) {
-                    edgeWeight *= 0.55f // Protect skin softness
+                    edgeWeight *= 0.75f // Gentle on skin
                 }
 
-                // Highlight protection factor: softly damp delta as luminance approaches 255
-                val highlightRollOff = if (yVal > 200f) {
-                    max(0.1f, (255f - yVal) / 55f)
+                // Highlight protection factor: smoothly protects near-255 peak highlights
+                val highlightRollOff = if (yVal > 225f) {
+                    max(0.2f, (255f - yVal) / 30f)
                 } else {
                     1.0f
                 }
 
-                val sharpenDelta = -laplacian * clampedSharpen * 0.22f * edgeWeight * highlightRollOff
+                val sharpenDelta = -laplacian * clampedSharpen * 0.55f * edgeWeight * highlightRollOff
                 var newY = yVal + sharpenDelta
 
-                // Natural Exposure Protection Tone Preservation:
-                // Gentle S-curve that anchors shadows and peak highlights
-                if (abs(clarityContrast - 1.0f) > 0.01f) {
+                // Natural Exposure & Clarity Tone Preservation:
+                if (abs(clarityContrast - 1.0f) > 0.005f) {
                     val normalizedY = newY / 255f
-                    // Soft midpoint curve around 0.5
-                    val contrastDelta = (normalizedY - 0.5f) * (clarityContrast - 1.0f) * 0.15f * highlightRollOff
+                    val contrastDelta = (normalizedY - 0.5f) * (clarityContrast - 1.0f) * 0.45f * highlightRollOff
                     newY = (normalizedY + contrastDelta) * 255f
                 }
 

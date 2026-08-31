@@ -73,12 +73,31 @@ object SamplePhotoGenerator {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
         when (sampleId) {
-            "out_of_focus_portrait" -> drawOutOfFocusPortrait(canvas, width, height, paint)
-            "high_iso_night_city" -> drawHighIsoNightCity(canvas, width, height, paint)
-            "motion_blur_pet" -> drawMotionBlurPet(canvas, width, height, paint)
-            "blurry_document_text" -> drawBlurryDocument(canvas, width, height, paint)
-            "macro_nature_flower" -> drawMacroFlower(canvas, width, height, paint)
-            else -> drawOutOfFocusPortrait(canvas, width, height, paint)
+            "out_of_focus_portrait" -> {
+                drawOutOfFocusPortrait(canvas, width, height, paint)
+                applyFastBlur(bitmap, radius = 7)
+            }
+            "high_iso_night_city" -> {
+                drawHighIsoNightCity(canvas, width, height, paint)
+                applySensorNoise(bitmap, noiseAmount = 35)
+                applyFastBlur(bitmap, radius = 2)
+            }
+            "motion_blur_pet" -> {
+                drawMotionBlurPet(canvas, width, height, paint)
+                applyMotionBlur(bitmap, streakLength = 14)
+            }
+            "blurry_document_text" -> {
+                drawBlurryDocument(canvas, width, height, paint)
+                applyFastBlur(bitmap, radius = 6)
+            }
+            "macro_nature_flower" -> {
+                drawMacroFlower(canvas, width, height, paint)
+                applyFastBlur(bitmap, radius = 5)
+            }
+            else -> {
+                drawOutOfFocusPortrait(canvas, width, height, paint)
+                applyFastBlur(bitmap, radius = 6)
+            }
         }
 
         return bitmap
@@ -144,9 +163,6 @@ object SamplePhotoGenerator {
         // Lips
         paint.color = Color.parseColor("#D96B6B")
         canvas.drawRoundRect(RectF(w * 0.43f, h * 0.47f, w * 0.57f, h * 0.51f), 15f, 15f, paint)
-
-        // Apply optical defocus blur across entire image
-        simulateDefocusBlur(canvas, w, h, blurRadius = 9)
     }
 
     private fun drawHighIsoNightCity(canvas: Canvas, w: Int, h: Int, paint: Paint) {
@@ -183,9 +199,6 @@ object SamplePhotoGenerator {
             val ly = h * 0.78f
             canvas.drawCircle(lx, ly, 7f, paint)
         }
-
-        // Add Heavy High-ISO Grain
-        addSyntheticSensorNoise(canvas, w, h, noiseAmount = 45)
     }
 
     private fun drawMotionBlurPet(canvas: Canvas, w: Int, h: Int, paint: Paint) {
@@ -229,9 +242,6 @@ object SamplePhotoGenerator {
         // Eyes
         paint.color = Color.parseColor("#27160C")
         canvas.drawCircle(w * 0.68f, h * 0.36f, 10f, paint)
-
-        // Apply Horizontal Motion Smear
-        simulateMotionBlur(canvas, w, h, offsetPx = 16)
     }
 
     private fun drawBlurryDocument(canvas: Canvas, w: Int, h: Int, paint: Paint) {
@@ -273,9 +283,6 @@ object SamplePhotoGenerator {
             }
             curY += 38f
         }
-
-        // Apply heavy optical defocus
-        simulateDefocusBlur(canvas, w, h, blurRadius = 7)
     }
 
     private fun drawMacroFlower(canvas: Canvas, w: Int, h: Int, paint: Paint) {
@@ -311,50 +318,113 @@ object SamplePhotoGenerator {
             val dotY = cy + (sin(a) * r).toFloat()
             canvas.drawCircle(dotX, dotY, 4f, paint)
         }
-
-        // Soft focus blur
-        simulateDefocusBlur(canvas, w, h, blurRadius = 6)
     }
 
-    private fun simulateDefocusBlur(canvas: Canvas, w: Int, h: Int, blurRadius: Int) {
-        // Create a blurred overlay pass
-        val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            alpha = 180
-        }
-        val offsets = listOf(-blurRadius, blurRadius)
-        for (dx in offsets) {
-            for (dy in offsets) {
-                // Multi-exposure soft blending creates optical defocus dispersion
-                val rect = RectF(dx.toFloat(), dy.toFloat(), (w + dx).toFloat(), (h + dy).toFloat())
-                // canvas.drawBitmap or draw blend
+    /**
+     * 2-pass separable box blur for realistic optical defocus.
+     */
+    private fun applyFastBlur(bitmap: Bitmap, radius: Int) {
+        if (radius <= 0) return
+        val w = bitmap.width
+        val h = bitmap.height
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        val temp = IntArray(w * h)
+
+        // Horizontal pass
+        for (y in 0 until h) {
+            val yOffset = y * w
+            for (x in 0 until w) {
+                var r = 0; var g = 0; var b = 0; var count = 0
+                val minX = kotlin.math.max(0, x - radius)
+                val maxX = kotlin.math.min(w - 1, x + radius)
+                for (ix in minX..maxX) {
+                    val p = pixels[yOffset + ix]
+                    r += (p shr 16) and 0xFF
+                    g += (p shr 8) and 0xFF
+                    b += p and 0xFF
+                    count++
+                }
+                val a = (pixels[yOffset + x] ushr 24) and 0xFF
+                temp[yOffset + x] = (a shl 24) or ((r / count) shl 16) or ((g / count) shl 8) or (b / count)
             }
         }
+
+        // Vertical pass
+        for (x in 0 until w) {
+            for (y in 0 until h) {
+                var r = 0; var g = 0; var b = 0; var count = 0
+                val minY = kotlin.math.max(0, y - radius)
+                val maxY = kotlin.math.min(h - 1, y + radius)
+                for (iy in minY..maxY) {
+                    val p = temp[iy * w + x]
+                    r += (p shr 16) and 0xFF
+                    g += (p shr 8) and 0xFF
+                    b += p and 0xFF
+                    count++
+                }
+                val a = (temp[y * w + x] ushr 24) and 0xFF
+                pixels[y * w + x] = (a shl 24) or ((r / count) shl 16) or ((g / count) shl 8) or (b / count)
+            }
+        }
+
+        bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
     }
 
-    private fun addSyntheticSensorNoise(canvas: Canvas, w: Int, h: Int, noiseAmount: Int) {
-        val rand = Random(999)
-        val noisePaint = Paint()
-        for (i in 0..18000) {
-            val x = rand.nextFloat() * w
-            val y = rand.nextFloat() * h
-            val c = rand.nextInt(256)
-            noisePaint.color = Color.argb(rand.nextInt(noiseAmount), c, c, c + 20)
-            canvas.drawPoint(x, y, noisePaint)
+    /**
+     * Applies directional horizontal motion smear to simulate camera/subject shake.
+     */
+    private fun applyMotionBlur(bitmap: Bitmap, streakLength: Int) {
+        val w = bitmap.width
+        val h = bitmap.height
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        val result = IntArray(w * h)
+
+        for (y in 0 until h) {
+            val yOffset = y * w
+            for (x in 0 until w) {
+                var r = 0; var g = 0; var b = 0; var count = 0
+                val maxX = kotlin.math.min(w - 1, x + streakLength)
+                for (ix in x..maxX) {
+                    val p = pixels[yOffset + ix]
+                    r += (p shr 16) and 0xFF
+                    g += (p shr 8) and 0xFF
+                    b += p and 0xFF
+                    count++
+                }
+                val a = (pixels[yOffset + x] ushr 24) and 0xFF
+                result[yOffset + x] = (a shl 24) or ((r / count) shl 16) or ((g / count) shl 8) or (b / count)
+            }
         }
+        bitmap.setPixels(result, 0, w, 0, 0, w, h)
     }
 
-    private fun simulateMotionBlur(canvas: Canvas, w: Int, h: Int, offsetPx: Int) {
-        // Draw directional streaks
-        val streakPaint = Paint().apply {
-            color = Color.WHITE
-            alpha = 25
-            strokeWidth = 2f
+    /**
+     * Adds high ISO sensor grain.
+     */
+    private fun applySensorNoise(bitmap: Bitmap, noiseAmount: Int) {
+        val w = bitmap.width
+        val h = bitmap.height
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+        val rand = Random(456)
+
+        for (i in pixels.indices) {
+            val p = pixels[i]
+            val a = (p ushr 24) and 0xFF
+            var r = (p shr 16) and 0xFF
+            var g = (p shr 8) and 0xFF
+            var b = p and 0xFF
+
+            val noise = rand.nextInt(-noiseAmount, noiseAmount)
+            r = (r + noise).coerceIn(0, 255)
+            g = (g + noise).coerceIn(0, 255)
+            b = (b + noise + rand.nextInt(-5, 5)).coerceIn(0, 255)
+
+            pixels[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
         }
-        val rand = Random(77)
-        for (i in 0..600) {
-            val x = rand.nextFloat() * w
-            val y = rand.nextFloat() * h
-            canvas.drawLine(x, y, x + offsetPx + rand.nextFloat() * 10f, y, streakPaint)
-        }
+        bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
     }
 }
