@@ -100,12 +100,31 @@ object PhotoQualityAnalyzer {
             else -> "High clarity & well-defined optical focus"
         }
 
+        var overexposedPixels = 0
+        var totalLum = 0.0
+        for (i in pixels.indices) {
+            val y = lum[i]
+            totalLum += y
+            if (y > 250f) {
+                overexposedPixels++
+            }
+        }
+        val meanBrightness = totalLum / pixels.size
+        val overexposedRatio = overexposedPixels.toFloat() / pixels.size.toFloat()
+        val exposureStatus = when {
+            overexposedRatio > 0.12f -> "Highlight Warning (${(overexposedRatio * 100).toInt()}% peak white)"
+            meanBrightness in 85.0..170.0 -> "Natural Exposure (Safe Dynamic Range)"
+            meanBrightness < 85.0 -> "Shadow / Low-Key Exposure"
+            else -> "High-Key / Bright Exposure"
+        }
+
         return QualityMetrics(
             sharpnessScore = sharpnessScore,
             noiseScore = noiseScore,
             blurRadiusEstimate = blurRadius,
             diagnosticSummary = diagnosis,
-            resolution = "${width} × ${height} px"
+            resolution = "${width} × ${height} px",
+            exposureBalance = exposureStatus
         )
     }
 }

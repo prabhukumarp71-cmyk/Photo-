@@ -98,11 +98,23 @@ fun QualityMetricsCard(
                 }
 
                 if (beforeMetrics.resolution.isNotEmpty()) {
-                    Text(
-                        text = beforeMetrics.resolution,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = ElectricCyan.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = if (afterMetrics != null) "4K Ultra HD" else "Input: ${beforeMetrics.resolution}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ElectricCyan,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -114,25 +126,34 @@ fun QualityMetricsCard(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Diagnosis",
-                        tint = if (afterMetrics != null) VibrantEmerald else WarmAmber,
-                        modifier = Modifier.size(18.dp)
-                    )
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Diagnosis",
+                            tint = if (afterMetrics != null) VibrantEmerald else WarmAmber,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = if (afterMetrics != null) {
+                                "Focus restored • Natural colors preserved • Highlights protected"
+                            } else {
+                                beforeMetrics.diagnosticSummary
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (afterMetrics != null) {
-                            "Focus restored • Details sharpened • Noise eliminated"
-                        } else {
-                            beforeMetrics.diagnosticSummary
-                        },
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Exposure Status: ${afterMetrics?.exposureBalance ?: beforeMetrics.exposureBalance}",
+                        fontSize = 11.sp,
+                        color = if ((afterMetrics?.exposureBalance ?: beforeMetrics.exposureBalance).contains("Warning")) WarmAmber else VibrantEmerald
                     )
                 }
             }

@@ -79,6 +79,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.model.EnhancementStrength
 import com.example.data.model.RestorationMode
 import com.example.ui.components.AlgorithmStudioSliders
 import com.example.ui.components.BeforeAfterViewer
@@ -153,7 +154,7 @@ fun MainScreen(
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
-                                text = if (uiState.isGeminiAvailable) "Gemini Vision & Inverse PSF Active" else "Optical Deblur & Denoise Engine",
+                                text = "Natural 4K Ultra HD • Highlight Safe",
                                 fontSize = 10.sp,
                                 color = ElectricCyan
                             )
@@ -263,6 +264,85 @@ fun MainScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            // Enhancement Strength Selector (Natural -> Balanced -> Strong)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("strength_selector_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = CardDefaults.outlinedCardBorder()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Enhancement Strength",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = VibrantEmerald.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Highlight Protected",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = VibrantEmerald,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        EnhancementStrength.entries.forEach { strength ->
+                            val isSelected = uiState.selectedStrength == strength
+                            val btnBg = if (isSelected) ElectricCyan else MaterialTheme.colorScheme.surfaceVariant
+                            val txtColor = if (isSelected) Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurfaceVariant
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(btnBg)
+                                    .clickable { viewModel.setStrength(strength) }
+                                    .padding(vertical = 8.dp)
+                                    .testTag("strength_${strength.name}"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = strength.title.replace(" (Default)", ""),
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = txtColor
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = uiState.selectedStrength.description,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
             // Restoration Mode Selector Header
             Row(
                 modifier = Modifier
@@ -272,15 +352,16 @@ fun MainScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Enhancement Algorithm",
+                    text = "Restoration Pipeline Mode",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "${RestorationMode.entries.size} Modes Available",
+                    text = "4K UHD Engine",
                     fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    fontWeight = FontWeight.SemiBold,
+                    color = ElectricCyan
                 )
             }
 
@@ -363,7 +444,7 @@ fun MainScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (uiState.restoredBitmap != null) "Re-Process with ${uiState.selectedMode.title}" else "Restore & Enhance Quality",
+                        text = if (uiState.restoredBitmap != null) "Re-Process (4K Ultra HD)" else "Enhance to 4K Ultra HD",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -389,7 +470,7 @@ fun MainScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Save to Gallery", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Save 4K Image", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         }
 
                         OutlinedButton(
@@ -398,7 +479,7 @@ fun MainScreen(
                                     type = "text/plain"
                                     putExtra(
                                         Intent.EXTRA_TEXT,
-                                        "Check out this out-of-focus photo restored with Photo Quality AI! Sharpness boosted by +${((uiState.afterMetrics?.sharpnessScore ?: 0f) - (uiState.beforeMetrics?.sharpnessScore ?: 0f)).toInt()}%"
+                                        "Check out this photo restored in natural 4K Ultra HD with Photo Quality AI!"
                                     )
                                 }
                                 context.startActivity(Intent.createChooser(sendIntent, "Share Restored Photo"))
@@ -454,8 +535,8 @@ private fun ModeCard(
     onClick: () -> Unit
 ) {
     val icon: ImageVector = when (mode) {
+        RestorationMode.NATURAL_4K_ULTRA -> Icons.Default.AutoAwesome
         RestorationMode.AI_DEEP_FOCUS -> Icons.Default.CenterFocusStrong
-        RestorationMode.AI_ULTRA_ENHANCE -> Icons.Default.AutoAwesome
         RestorationMode.ALGO_DEBLUR_SHARPEN -> Icons.Default.ShutterSpeed
         RestorationMode.ALGO_DEEP_DENOISE -> Icons.Default.CleaningServices
         RestorationMode.MANUAL_STUDIO -> Icons.Default.Tune

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import com.example.BuildConfig
+import com.example.processor.AlgorithmicImageProcessor
 import com.squareup.moshi.Json
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
@@ -99,15 +100,31 @@ object GeminiRestorationEngine {
             inputBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
             val base64Data = Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
 
+            val width = inputBitmap.width
+            val height = inputBitmap.height
+            val ratio = width.toFloat() / height.toFloat()
+
+            val targetAspectRatio = when {
+                ratio in 0.95f..1.05f -> "1:1"
+                ratio in 0.70f..0.85f -> "3:4"
+                ratio in 1.20f..1.40f -> "4:3"
+                ratio in 0.50f..0.65f -> "9:16"
+                ratio in 1.55f..1.85f -> "16:9"
+                ratio < 0.75f -> "9:16"
+                ratio > 1.35f -> "16:9"
+                else -> "1:1"
+            }
+
             val prompt = buildString {
-                append("Restore this blurry, out-of-focus photograph with extreme fidelity. ")
-                append("De-blur camera motion blur and reverse optical lens defocus blur. ")
-                append("Bring out-of-focus elements into crisp, crystal clear focus while strictly matching and preserving the exact original scene geometry, facial identity, natural skin texture, hair, color palette, lighting, and composition. ")
-                append("Eliminate high ISO sensor noise, chroma grain, and compression artifacts. ")
+                append("Restore this blurry, out-of-focus photograph into a natural, sharp, high-quality 4K Ultra HD master photograph. ")
+                append("CRITICAL EXPOSURE & COLOR PRESERVATION: Do NOT overexpose or boost global brightness. Strictly preserve the original exposure, natural lighting, shadow depth, white balance, and highlight details (skies, lights, skin highlights, and white objects must NOT become pure white or blown out). ")
+                append("INTELLIGENT DEBLURRING & DETAIL RESTORATION: Accurately reverse lens defocus blur and camera motion smear. Bring out-of-focus elements into crisp, crystal clear focus without halos, edge ringing, or artificial outlines. ")
+                append("NATURAL SKIN TONES & TEXTURES: Preserve authentic facial features, natural skin tones, hair strands, and organic micro-textures without plastic smoothing or oversaturation. ")
+                append("NOISE REDUCTION: Suppress high ISO sensor grain and compression artifacts cleanly while retaining fine texture. ")
                 if (focusPromptExtra.isNotBlank()) {
                     append(focusPromptExtra).append(" ")
                 }
-                append("Output high resolution restored photo.")
+                append("Maintain exact original composition and aspect ratio.")
             }
 
             val requestObj = GeminiGenerateRequest(
@@ -127,10 +144,10 @@ object GeminiRestorationEngine {
                 generationConfig = GeminiGenerationConfig(
                     responseModalities = listOf("TEXT", "IMAGE"),
                     imageConfig = GeminiImageConfig(
-                        aspectRatio = "1:1",
-                        imageSize = "1K"
+                        aspectRatio = targetAspectRatio,
+                        imageSize = "2K"
                     ),
-                    temperature = 0.2f
+                    temperature = 0.15f
                 )
             )
 
@@ -164,7 +181,8 @@ object GeminiRestorationEngine {
                 val decodedBytes = Base64.decode(returnedBase64, Base64.DEFAULT)
                 val decodedBitmap = BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
                 if (decodedBitmap != null) {
-                    return@withContext Result.success(decodedBitmap)
+                    val final4kBitmap = AlgorithmicImageProcessor.upscaleTo4kUltraHd(decodedBitmap)
+                    return@withContext Result.success(final4kBitmap)
                 }
             }
 

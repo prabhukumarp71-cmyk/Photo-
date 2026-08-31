@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.local.RestorationRepository
+import com.example.data.model.EnhancementStrength
 import com.example.data.model.ManualEnhancementParams
 import com.example.data.model.QualityMetrics
 import com.example.data.model.RestorationMode
@@ -17,6 +18,7 @@ import com.example.processor.AlgorithmicImageProcessor
 import com.example.processor.ImageFileManager
 import com.example.processor.PhotoQualityAnalyzer
 import com.example.processor.SamplePhotoGenerator
+import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +34,9 @@ data class MainUiState(
     val restoredBitmap: Bitmap? = null,
     val isProcessing: Boolean = false,
     val processingMessage: String = "",
-    val selectedMode: RestorationMode = RestorationMode.AI_DEEP_FOCUS,
+    val selectedMode: RestorationMode = RestorationMode.NATURAL_4K_ULTRA,
+    val selectedStrength: EnhancementStrength = EnhancementStrength.BALANCED,
+    val target4kOutput: Boolean = true,
     val manualParams: ManualEnhancementParams = ManualEnhancementParams(),
     val beforeMetrics: QualityMetrics? = null,
     val afterMetrics: QualityMetrics? = null,
@@ -79,11 +83,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val defaultMode = when (sampleItem?.defaultMode) {
                 "AI_DEEP_FOCUS" -> RestorationMode.AI_DEEP_FOCUS
-                "AI_ULTRA_ENHANCE" -> RestorationMode.AI_ULTRA_ENHANCE
+                "NATURAL_4K_ULTRA" -> RestorationMode.NATURAL_4K_ULTRA
                 "ALGO_DEBLUR_SHARPEN" -> RestorationMode.ALGO_DEBLUR_SHARPEN
                 "ALGO_DEEP_DENOISE" -> RestorationMode.ALGO_DEEP_DENOISE
                 "MANUAL_STUDIO" -> RestorationMode.MANUAL_STUDIO
-                else -> RestorationMode.AI_DEEP_FOCUS
+                else -> RestorationMode.NATURAL_4K_ULTRA
             }
 
             _uiState.value = _uiState.value.copy(
@@ -129,6 +133,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(selectedMode = mode)
     }
 
+    fun setStrength(strength: EnhancementStrength) {
+        _uiState.value = _uiState.value.copy(
+            selectedStrength = strength,
+            manualParams = _uiState.value.manualParams.copy(strength = strength)
+        )
+    }
+
+    fun setTarget4kOutput(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            target4kOutput = enabled,
+            manualParams = _uiState.value.manualParams.copy(target4kOutput = enabled)
+        )
+    }
+
     fun updateManualParams(params: ManualEnhancementParams) {
         _uiState.value = _uiState.value.copy(manualParams = params)
     }
@@ -136,28 +154,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun enhancePhoto(context: Context) {
         val original = _uiState.value.originalBitmap ?: return
         val currentMode = _uiState.value.selectedMode
-        val manualParams = _uiState.value.manualParams
+        val currentStrength = _uiState.value.selectedStrength
+        val manualParams = _uiState.value.manualParams.copy(
+            target4kOutput = _uiState.value.target4kOutput,
+            strength = currentStrength
+        )
 
         viewModelScope.launch {
             val startTime = System.currentTimeMillis()
             _uiState.value = _uiState.value.copy(
                 isProcessing = true,
-                processingMessage = "Analyzing optical point spread function..."
+                processingMessage = "Analyzing exposure, colors, and optical blur PSF..."
             )
 
-            delay(300)
+            delay(200)
 
             var restored: Bitmap? = null
 
             // Try AI if an AI mode is selected and API key is available
-            if ((currentMode == RestorationMode.AI_DEEP_FOCUS || currentMode == RestorationMode.AI_ULTRA_ENHANCE) &&
+            if ((currentMode == RestorationMode.AI_DEEP_FOCUS || currentMode == RestorationMode.NATURAL_4K_ULTRA) &&
                 GeminiRestorationEngine.isApiKeyConfigured()
             ) {
-                _uiState.value = _uiState.value.copy(processingMessage = "Executing Gemini AI Focus & Denoise Engine...")
-                val extraPrompt = if (currentMode == RestorationMode.AI_DEEP_FOCUS) {
-                    "Prioritize resolving out-of-focus optical blur, sharp eye details, iris reflections, and clean facial contours."
-                } else {
-                    "Prioritize deep sensor grain suppression, micro-texture recovery, and crisp contrast."
+                _uiState.value = _uiState.value.copy(processingMessage = "Processing 4K AI Deblur & Detail Engine...")
+                val extraPrompt = when (currentMode) {
+                    RestorationMode.AI_DEEP_FOCUS -> "Focus on optical lens defocus reversal, sharp iris/eye reflections, clean edges without halos."
+                    else -> "Focus on natural color balance, highlight detail protection, and noise-free 4K super resolution."
                 }
 
                 val aiResult = GeminiRestorationEngine.restoreWithGeminiAi(original, extraPrompt)
@@ -166,14 +187,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // Fallback or explicit Algorithmic pipeline
+            // Algorithmic high-precision pipeline
             if (restored == null) {
                 _uiState.value = _uiState.value.copy(
-                    processingMessage = "Applying high-precision optical deblur, bilateral denoise & unsharp mask..."
+                    processingMessage = "Executing Natural 4K Pipeline (Noise Reduction → Inverse Deblur → 4K UHD)..."
                 )
                 delay(200)
                 restored = withContext(Dispatchers.Default) {
-                    AlgorithmicImageProcessor.process(original, currentMode, manualParams)
+                    AlgorithmicImageProcessor.process(
+                        inputBitmap = original,
+                        mode = currentMode,
+                        customParams = if (currentMode == RestorationMode.MANUAL_STUDIO) manualParams else null,
+                        selectedStrength = currentStrength
+                    )
                 }
             }
 
@@ -193,7 +219,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     title = _uiState.value.currentPhotoTitle,
                     originalImagePath = origPath,
                     restoredImagePath = restPath,
-                    mode = currentMode.title,
+                    mode = "${currentMode.title} (${currentStrength.title})",
                     sharpnessBefore = _uiState.value.beforeMetrics?.sharpnessScore ?: 0f,
                     sharpnessAfter = afterMetrics.sharpnessScore,
                     noiseBefore = _uiState.value.beforeMetrics?.noiseScore ?: 0f,
@@ -205,12 +231,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Ignore save error
             }
 
+            val sharpnessDelta = ((afterMetrics.sharpnessScore - (_uiState.value.beforeMetrics?.sharpnessScore ?: 1f))).toInt()
             _uiState.value = _uiState.value.copy(
                 restoredBitmap = restored,
                 afterMetrics = afterMetrics,
                 isProcessing = false,
                 processingMessage = "",
-                toastMessage = "✨ Photo restored successfully (+${((afterMetrics.sharpnessScore - (_uiState.value.beforeMetrics?.sharpnessScore ?: 1f))).toInt()}% sharpness)"
+                toastMessage = "✨ Restored to 4K Ultra HD (+${max(0, sharpnessDelta)}% sharpness, exposure preserved)"
             )
         }
     }

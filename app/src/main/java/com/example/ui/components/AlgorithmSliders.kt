@@ -79,18 +79,18 @@ fun AlgorithmStudioSliders(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 1. Sharpen Amount
+            // 1. Sharpen Amount (Controlled, Non-Ringing)
             ParameterSliderItem(
-                label = "Sharpening Boost",
+                label = "Edge Sharpening (Luminance Only)",
                 value = params.sharpenAmount,
-                valueRange = 0.5f..4.0f,
+                valueRange = 0.2f..2.5f,
                 formattedValue = String.format(Locale.US, "%.1fx", params.sharpenAmount),
                 onValueChange = { onParamsChanged(params.copy(sharpenAmount = it)) }
             )
 
             // 2. Inverse Deblur (PSF focus recovery)
             ParameterSliderItem(
-                label = "Focus Deblur (Inverse PSF)",
+                label = "Intelligent Deblur (Halo-Free PSF)",
                 value = params.deblurInverseStrength,
                 valueRange = 0.0f..1.0f,
                 formattedValue = "${(params.deblurInverseStrength * 100).toInt()}%",
@@ -99,18 +99,18 @@ fun AlgorithmStudioSliders(
 
             // 3. Bilateral Noise Reduction
             ParameterSliderItem(
-                label = "Edge-Preserving Denoise",
+                label = "Natural Noise Reduction",
                 value = params.denoiseAmount,
                 valueRange = 0.0f..1.0f,
                 formattedValue = "${(params.denoiseAmount * 100).toInt()}%",
                 onValueChange = { onParamsChanged(params.copy(denoiseAmount = it)) }
             )
 
-            // 4. Micro-Contrast / Clarity
+            // 4. Micro-Contrast / Clarity (Safe range to prevent overexposure)
             ParameterSliderItem(
-                label = "Micro-Contrast & Clarity",
+                label = "Tone Clarity (Highlight-Protected)",
                 value = params.clarityContrast,
-                valueRange = 0.8f..2.0f,
+                valueRange = 0.95f..1.25f,
                 formattedValue = String.format(Locale.US, "%.2fx", params.clarityContrast),
                 onValueChange = { onParamsChanged(params.copy(clarityContrast = it)) }
             )

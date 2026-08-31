@@ -37,7 +37,7 @@ object SamplePhotoGenerator {
             title = "Low-Light Night City",
             description = "High ISO low-light urban scene with heavy chromatic noise and sensor grain.",
             problemTag = "Sensor Grain & Noise",
-            defaultMode = "AI_ULTRA_ENHANCE"
+            defaultMode = "NATURAL_4K_ULTRA"
         ),
         SamplePhotoItem(
             id = "motion_blur_pet",
