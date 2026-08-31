@@ -5,7 +5,6 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import com.example.BuildConfig
 import com.squareup.moshi.Json
-import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.Dispatchers
@@ -17,54 +16,45 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
-@JsonClass(generateAdapter = true)
 data class GeminiGenerateRequest(
     val contents: List<GeminiContent>,
     val generationConfig: GeminiGenerationConfig? = null
 )
 
-@JsonClass(generateAdapter = true)
 data class GeminiContent(
     val parts: List<GeminiPart>
 )
 
-@JsonClass(generateAdapter = true)
 data class GeminiPart(
     val text: String? = null,
     val inlineData: GeminiInlineData? = null
 )
 
-@JsonClass(generateAdapter = true)
 data class GeminiInlineData(
     val mimeType: String,
     val data: String
 )
 
-@JsonClass(generateAdapter = true)
 data class GeminiGenerationConfig(
     val responseModalities: List<String>? = null,
     val imageConfig: GeminiImageConfig? = null,
     val temperature: Float? = null
 )
 
-@JsonClass(generateAdapter = true)
 data class GeminiImageConfig(
     val aspectRatio: String? = null,
     val imageSize: String? = null
 )
 
-@JsonClass(generateAdapter = true)
 data class GeminiGenerateResponse(
     val candidates: List<GeminiCandidate>? = null,
     val error: GeminiErrorDetails? = null
 )
 
-@JsonClass(generateAdapter = true)
 data class GeminiCandidate(
     val content: GeminiContent? = null
 )
 
-@JsonClass(generateAdapter = true)
 data class GeminiErrorDetails(
     val code: Int? = null,
     val message: String? = null,

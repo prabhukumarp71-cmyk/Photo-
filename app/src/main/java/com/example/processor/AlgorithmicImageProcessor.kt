@@ -224,7 +224,7 @@ object AlgorithmicImageProcessor {
         return result
     }
 
-    private inline fun convolve3x3(
+    private fun convolve3x3(
         c00: Int, c01: Int, c02: Int,
         c10: Int, c11: Int, c12: Int,
         c20: Int, c21: Int, c22: Int,
