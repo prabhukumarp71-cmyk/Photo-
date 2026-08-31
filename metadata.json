@@ -1,0 +1,7 @@
+{
+  "name": "Photo Quality AI",
+  "description": "Enhance, deblur, sharpen, and denoise photos using advanced AI and precision focus restoration algorithms.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
